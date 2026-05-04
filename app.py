@@ -43,7 +43,6 @@ DE_STIMULI = [
 # Practice audio (should NOT be from main stimuli)
 PRACTICE_STIMULI = [
     {"id": "practice_1", "label": "Practice 1", "path": "audio/practice/practice_1.wav"},
-    {"id": "practice_2", "label": "Practice 2", "path": "audio/practice/practice_2.wav"},
 ]
 
 # Output directory for results
