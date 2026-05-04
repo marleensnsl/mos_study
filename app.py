@@ -81,7 +81,7 @@ DIMENSIONS = [
     {
         "key": "emotional_appropriateness",
         "label": "Emotional Appropriateness",
-        "question": "How appropriate are the emotions conveyed in the speech for the dialogue context? TODO: insert example",
+        "question": "How appropriate are the emotions conveyed in the speech for the dialogue context? (e.g. a client talking about something bad that happened should not sound happy)",
         "anchors": ("Completely inappropriate", "Perfectly appropriate"),
     },
     {
