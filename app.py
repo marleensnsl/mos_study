@@ -234,22 +234,25 @@ def page_welcome():
 
     st.markdown("""
     ### Information Sheet & Privacy Statement
-
+    We kindly ask you to read the following explanations carefully and to sign the present declaration of consent before you take part in the study.
+                
     **Subject of the study**  
-    This study investigates how humans perceive speech from AI speech synthesis systems and real human speakers in the context of therapeutic conversations, by rating audio excerpts on various perceptual dimensions.
+    This study investigates how humans perceive speech from AI speech synthesis systems and real human speakers in the context of therapeutic conversations, by rating audio clips on various perceptual dimensions.
 
     **Process of the study**  
-    Participants will listen to a series of audio excerpts of therapeutic conversations and rate 
-    each clip on several perceptual dimensions. The study consists of two parts (one with English 
-    clips, one with German clips). Participants complete the study online via a web application and 
-    are asked to use headphones in a quiet environment on a laptop or desktop computer.
-
-    **Duration and compensation**  
+    Participants will listen to a series of audio clips of therapeutic conversations and rate each 
+    clip on four perceptual dimensions: Naturalness, Intelligibility, Emotional Appropriateness, 
+    and a Human-or-AI judgement. Before the main study, participants complete a short practice 
+    trial to familiarise themselves with the task. The study consists of two parts (one with English 
+    clips, one with German clips). Participants are asked to use 
+    headphones in a quiet environment on a laptop or desktop computer.
+                
+    **Duration and compensation for participation**  
     Participation in the study will require approximately ?? minutes. Participants will not receive 
-    any kind of compensation.
+    any kind of gratification.
 
     **Possible benefit of the study**  
-    This study contributes to research on the perceptual quality of AI-generated speech in mental health. Results may inform the development of more natural and trustworthy 
+    This study contributes to research on the perceptual quality of AI-generated speech in mental health. Results may inform the development of more natural 
     speech synthesis systems for therapeutic applications or training resources for therapeutic learners.
 
     **Experiences and risks associated with participation**  
@@ -269,19 +272,14 @@ def page_welcome():
     Perceptual ratings of audio clips.
                 
     Personal data collected are:  
-    Age, gender, language proficiency, and whether the participant has experience with therapeutic conversations.
+    Age, sex, language proficiency, and whether the participant has experience with therapeutic conversations.
 
     **Confidentiality**  
-    All data collected in the course of the study are naturally confidential and will only be used 
-    in anonymized form. Demographic data such as age group or native language do not allow deducing 
-    unambiguous information about your person. You will be asked at no point of the study to disclose 
-    your name or other unambiguous information about yourself.
+    All data collected in course of the study are naturally confidential and will only be used in anonymized form. Demographic data like age or sex do not allow deducing unambiguous information about your person. You will be asked at no point of the study to disclose your name or other unambiguous information about yourself.
 
     **Data storage**  
     Collected data will be stored locally on the Master Thesis student's password-protected laptop. Data storage takes place in a form which does not allow 
-    conclusions about your person, meaning that all data will be anonymized. Raw data will be deleted 
-    by June 30, 2026. This declaration of consent will be stored separately from the collected data 
-    and will be destroyed by the same date.
+    conclusions about your person, meaning that all data will be anonymized. 
 
     **Voluntariness & Rights of the participants**  
     Your participation in this study is voluntary. You can withdraw from participation at any point 
@@ -301,6 +299,8 @@ def page_welcome():
     I agree that any data collected in the course of the study will be analyzed for scientific 
     purposes and stored in anonymized form. I am aware that my participation is voluntary and that 
     I can withdraw at any time and without giving reasons.
+    
+    If you have any questions, suggestions or complaints, you are welcome to contact Marleen Sinsel: marleen.sinsel@stud.tu-darmstadt.de
     """)
 
     consent = st.checkbox("I confirm that I have read and understood the above information and agree to participate in this study.")
