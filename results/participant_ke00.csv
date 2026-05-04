@@ -1,16 +1,4 @@
-timestamp,participant_id,block,stimulus_id,stimulus_label,position_in_block,rating_intelligibility,rating_expressiveness,rating_emotional_appropriateness,rating_naturalness,demo_age,demo_gender,demo_english_level,demo_german_level,demo_therapy_experience
-2026-04-24T15:49:30.969130,ke00,en,en_m5,EN-M5,0,3,3,3,4,32,Male,B2,B2,
-2026-04-24T15:49:52.123730,ke00,en,en_m1,EN-M1,1,1,1,1,1,32,Male,B2,B2,
-2026-04-24T15:50:08.994382,ke00,en,en_m2,EN-M2,2,1,1,1,1,32,Male,B2,B2,
-2026-04-24T15:50:20.702323,ke00,en,en_m6,EN-M6,3,1,1,1,1,32,Male,B2,B2,
-2026-04-24T15:50:25.837373,ke00,en,en_gt,EN-GT,4,1,1,1,1,32,Male,B2,B2,
-2026-04-24T15:50:31.868532,ke00,en,en_m7,EN-M7,5,1,1,1,1,32,Male,B2,B2,
-2026-04-24T15:50:51.309064,ke00,en,en_m4,EN-M4,6,2,2,2,2,32,Male,B2,B2,
-2026-04-24T15:51:03.610431,ke00,en,en_m3,EN-M3,7,2,2,2,2,32,Male,B2,B2,
-2026-04-24T15:52:35.742669,ke00,de,de_m2,DE-M2,0,2,1,1,2,32,Male,B2,B2,
-2026-04-24T15:53:42.728643,ke00,de,de_m6,DE-M6,1,2,2,2,1,32,Male,B2,B2,
-2026-04-24T15:53:49.937238,ke00,de,de_m1,DE-M1,2,3,3,3,3,32,Male,B2,B2,
-2026-04-24T16:03:27.382803,ke00,de,de_m7,DE-M7,3,5,1,5,3,32,Male,B2,B2,
-2026-04-24T16:06:28.168523,ke00,de,de_m3,DE-M3,4,5,3,3,3,32,Male,B2,B2,
-2026-04-24T16:37:09.687326,ke00,de,de_m5,DE-M5,5,1,1,1,1,32,Male,B2,B2,
-2026-04-24T16:37:36.945189,ke00,de,de_m4,DE-M4,6,1,1,1,2,32,Male,B2,B2,None
+timestamp,participant_id,block,stimulus_id,stimulus_label,position_in_block,rating_naturalness,rating_intelligibility,rating_emotional_appropriateness,rating_human_or_ai,demo_age,demo_gender,demo_english_level,demo_german_level,demo_therapy_experience_receiving,demo_therapy_experience_giving
+2026-05-04T19:03:06.123220,ke00,en,en_m5,EN-M5,0,2,3,3,AI,23,Prefer not to say,B2,B2,,
+2026-05-04T19:03:14.656517,ke00,en,en_m1,EN-M1,1,1,1,1,Unsure,23,Prefer not to say,B2,B2,,
+2026-05-04T19:03:32.044628,ke00,en,en_m2,EN-M2,2,1,1,1,Unsure,23,Prefer not to say,B2,B2,None,None
