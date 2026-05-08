@@ -19,15 +19,29 @@ from pathlib import Path
 # Structure: audio/en/model_1/clip.wav, audio/en/model_2/clip.wav, ...
 # Ground truth for EN: audio/en/ground_truth/clip.wav
 
+# English stimuli: dialogues 19 and 20, each with one ground truth (AnnoMI)
+# and eight model variants (cosyvoice, fishaudio, qwen3-tts, vits, and
+# four speecht5 finetunes).
+_EN_MODELS = [
+    ("AnnoMI",            "AnnoMI (ground truth)"),
+    ("cosyvoice",         "CosyVoice"),
+    ("fishaudio",         "FishAudio"),
+    ("qwen3-tts",         "Qwen3-TTS"),
+    ("vits",              "VITS"),
+    ("speecht5_base",     "SpeechT5 (base)"),
+    ("speecht5_cosyvoice", "SpeechT5 (CosyVoice ft)"),
+    ("speecht5_fishaudio", "SpeechT5 (FishAudio ft)"),
+    ("speecht5_qwen3-tts", "SpeechT5 (Qwen3-TTS ft)"),
+]
+
 EN_STIMULI = [
-    {"id": "en_gt",      "label": "EN-GT",  "path": "audio/en/ground_truth/clip.wav"},
-    {"id": "en_m1",      "label": "EN-M1",  "path": "audio/en/model_1/clip.wav"},
-    {"id": "en_m2",      "label": "EN-M2",  "path": "audio/en/model_2/clip.wav"},
-    {"id": "en_m3",      "label": "EN-M3",  "path": "audio/en/model_3/clip.wav"},
-    {"id": "en_m4",      "label": "EN-M4",  "path": "audio/en/model_4/clip.wav"},
-    {"id": "en_m5",      "label": "EN-M5",  "path": "audio/en/model_5/clip.wav"},
-    {"id": "en_m6",      "label": "EN-M6",  "path": "audio/en/model_6/clip.wav"},
-    {"id": "en_m7",      "label": "EN-M7",  "path": "audio/en/model_7/clip.wav"},
+    {
+        "id": f"en_d{dlg}_{model_key.replace('-', '_')}",
+        "label": f"EN-D{dlg}-{model_label}",
+        "path": f"dialogue_excerpts/dialogue_{dlg}/{dlg}_{model_key}.wav",
+    }
+    for dlg in (19, 20)
+    for model_key, model_label in _EN_MODELS
 ]
 
 DE_STIMULI = [
@@ -65,11 +79,11 @@ DIMENSIONS = [
         "question": "How natural does the speech sound overall?",
         "anchors": ("Very unnatural", "Very natural"),
         "score_labels": {
-            1: "Fully synthetic or robotic; extremely unnatural and monotone",
-            2: "Noticeably synthetic; unnatural artifacts or limited prosodic variation",
-            3: "Moderately natural; occasional synthetic artifacts or uneven prosody",
-            4: "Largely natural with minor imperfections (e.g. slight flatness or over-emphasis)",
-            5: "Completely natural; indistinguishable from a human recording",
+            1: "Extremely synthetic, e.g.: robotic and monotonic",
+            2: "",
+            3: "Neutral",
+            4: "",
+            5: "Extremely natural, e.g.: indistinguishable from a human recording",
         },
     },
     {
@@ -78,11 +92,11 @@ DIMENSIONS = [
         "question": "How easy was it to understand what was being said?",
         "anchors": ("Very hard to understand", "Perfectly clear"),
         "score_labels": {
-            1: "Impossible to understand",
-            2: "Difficult to understand; many words are unclear",
-            3: "Most words are understandable; some effort required",
-            4: "Almost all words are clear; minor effort occasionally required",
-            5: "Every word is perfectly clear and understandable",
+            1: "Very hard to understand, e.g.: most/all of the words cannot be understood",
+            2: "",
+            3: "Neutral",
+            4: "",
+            5: "Very easy to understand, e.g. most/all words are perfectly clear",
         },
     },
 
@@ -92,11 +106,11 @@ DIMENSIONS = [
         "question": "How appropriate are the emotions conveyed in the speech for the dialogue context? (e.g. a client talking about something bad that happened should not sound happy)",
         "anchors": ("Completely inappropriate", "Perfectly appropriate"),
         "score_labels": {
-            1: "Completely inappropriate; emotion entirely mismatches with the context",
-            2: "Mostly inappropriate",
-            3: "Moderately appropriate",
-            4: "Largely appropriate",
-            5: "Completely appropriate; emotion perfectly matches the dialogue context",
+            1: "Inappropriate, e.g.: most/all emotions of the speakers do not match with the context of the dialogue",
+            2: "",
+            3: "Neutral",
+            4: "",
+            5: "Appropriate, e.g.: most/all emotions of the speakers match with the context of the dialogue",
         },
     },
     {
@@ -450,7 +464,7 @@ def page_practice():
     total = len(PRACTICE_STIMULI)
     stimulus = PRACTICE_STIMULI[idx]
 
-    st.title(f"Practice Trial {idx + 1} of {total}")
+    st.title(f"Practice Trial {idx + 1}/{total}")
     st.info("This is a practice trial. Your ratings here will **not** be recorded.")
     progress_bar(idx, total, "Practice")
     st.divider()

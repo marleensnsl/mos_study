@@ -1,4 +1,7 @@
 timestamp,participant_id,block,stimulus_id,stimulus_label,position_in_block,rating_naturalness,rating_intelligibility,rating_emotional_appropriateness,rating_human_or_ai,demo_age,demo_gender,demo_english_level,demo_german_level,demo_therapy_experience_receiving,demo_therapy_experience_giving
 2026-05-04T19:03:06.123220,ke00,en,en_m5,EN-M5,0,2,3,3,AI,23,Prefer not to say,B2,B2,,
 2026-05-04T19:03:14.656517,ke00,en,en_m1,EN-M1,1,1,1,1,Unsure,23,Prefer not to say,B2,B2,,
-2026-05-04T19:03:32.044628,ke00,en,en_m2,EN-M2,2,1,1,1,Unsure,23,Prefer not to say,B2,B2,None,None
+2026-05-04T19:03:32.044628,ke00,en,en_m2,EN-M2,2,1,1,1,Unsure,23,Prefer not to say,B2,B2,,
+2026-05-06T10:52:27.982018,ke00,en,en_m5,EN-M5,0,2,2,2,Unsure,23,Male,B2,B2,,
+2026-05-08T15:16:35.528332,ke00,en,en_d19_speecht5_base,EN-D19-SpeechT5 (base),0,1,1,1,Unsure,32,Prefer not to say,B2,B2,,
+2026-05-08T15:17:25.600898,ke00,en,en_d20_vits,EN-D20-VITS,1,1,1,1,Human,32,Prefer not to say,B2,B2,None,None
