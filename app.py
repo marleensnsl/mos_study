@@ -4,8 +4,8 @@ Master Project: Dialogue Speech Generation
 """
 
 import streamlit as st
-import pandas as pd
 import os
+import csv
 import random
 import hashlib
 from datetime import datetime
@@ -19,7 +19,7 @@ from pathlib import Path
 # Structure: audio/en/model_1/clip.wav, audio/en/model_2/clip.wav, ...
 # Ground truth for EN: audio/en/ground_truth/clip.wav
 
-# English stimuli: dialogues 19 and 20, each with one ground truth (AnnoMI)
+# English stimuli: dialogues 2 and 20, each with one ground truth (AnnoMI)
 # and eight model variants (cosyvoice, fishaudio, qwen3-tts, vits, and
 # four speecht5 finetunes).
 _EN_MODELS = [
@@ -34,34 +34,67 @@ _EN_MODELS = [
     ("speecht5_qwen3-tts", "SpeechT5 (Qwen3-TTS ft)"),
 ]
 
+# German stimuli: dialogues 2 and 20. No AnnoMI ground truth (AnnoMI is
+# English-only) and no VITS (English-only baseline). Only one SpeechT5
+# finetune is available for German (fishaudio).
+_DE_MODELS = [
+    ("XTTS-v2",            "XTTS v2"),
+    ("cosyvoice",          "CosyVoice"),
+    ("fishaudio",          "FishAudio"),
+    ("qwen3-tts",          "Qwen3-TTS"),
+    ("speecht5_base",      "SpeechT5 (base)"),
+    ("speecht5_fishaudio", "SpeechT5 (FishAudio ft)"),
+]
+
 EN_STIMULI = [
     {
-        "id": f"en_d{dlg}_{model_key.replace('-', '_')}",
-        "label": f"EN-D{dlg}-{model_label}",
-        "path": f"dialogue_excerpts/dialogue_{dlg}/{dlg}_{model_key}.wav",
+        "id": f"en_d{dlg:02d}_{model_key.replace('-', '_')}",
+        "label": f"EN-D{dlg:02d}-{model_label}",
+        "path": f"dialogue_excerpts/english/dialogue_{dlg}/{dlg:02d}_{model_key}.wav",
     }
-    for dlg in (19, 20)
+    for dlg in (2, 20)
     for model_key, model_label in _EN_MODELS
 ]
 
 DE_STIMULI = [
-    {"id": "de_m1",      "label": "DE-M1",  "path": "audio/de/model_1/clip.wav"},
-    {"id": "de_m2",      "label": "DE-M2",  "path": "audio/de/model_2/clip.wav"},
-    {"id": "de_m3",      "label": "DE-M3",  "path": "audio/de/model_3/clip.wav"},
-    {"id": "de_m4",      "label": "DE-M4",  "path": "audio/de/model_4/clip.wav"},
-    {"id": "de_m5",      "label": "DE-M5",  "path": "audio/de/model_5/clip.wav"},
-    {"id": "de_m6",      "label": "DE-M6",  "path": "audio/de/model_6/clip.wav"},
-    {"id": "de_m7",      "label": "DE-M7",  "path": "audio/de/model_7/clip.wav"},
+    {
+        "id": f"de_d{dlg:02d}_{model_key.replace('-', '_')}",
+        "label": f"DE-D{dlg:02d}-{model_label}",
+        "path": f"dialogue_excerpts/german/dialogue_{dlg:02d}/{dlg:02d}_{model_key}.wav",
+    }
+    for dlg in (2, 20)
+    for model_key, model_label in _DE_MODELS
 ]
 
 # Practice audio (should NOT be from main stimuli)
 PRACTICE_STIMULI = [
-    {"id": "practice_1", "label": "Practice 1", "path": "audio/practice/practice_1.wav"},
+    {
+        "id": "practice_1",
+        "label": "Practice 1",
+        "path": "dialogue_excerpts/practice_trial/control874_fishaudio.wav",
+    },
 ]
 
-# Output directory for results
+# Output directory for local-CSV fallback (used if Google Sheets is not configured
+# or if a Sheets write fails). On Streamlit Cloud this is ephemeral.
 RESULTS_DIR = "results"
 os.makedirs(RESULTS_DIR, exist_ok=True)
+
+# Google Sheets configuration. The spreadsheet ID and a service-account JSON
+# blob are read from st.secrets when deployed; locally the app falls back to CSV.
+GSHEET_RATINGS_WORKSHEET = "ratings"
+GSHEET_COMMENTS_WORKSHEET = "comments"
+
+RATING_COLUMNS = [
+    "timestamp", "participant_id", "block", "stimulus_id", "stimulus_label",
+    "position_in_block",
+    "rating_naturalness", "rating_intelligibility",
+    "rating_emotional_appropriateness", "rating_human_or_ai",
+    "demo_age", "demo_gender", "demo_english_level", "demo_german_level",
+    "demo_therapy_experience_receiving", "demo_therapy_experience_giving",
+]
+
+COMMENT_COLUMNS = ["timestamp", "participant_id", "comment"]
 
 # Likert scale labels
 LIKERT_OPTIONS = {
@@ -132,11 +165,78 @@ def get_results_path(participant_id: str) -> str:
     return os.path.join(RESULTS_DIR, f"participant_{safe_id}.csv")
 
 
+@st.cache_resource(show_spinner=False)
+def _get_gspread_client():
+    """Return an authorised gspread client, or None if not configured."""
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+    except ImportError:
+        return None
+    if "gcp_service_account" not in st.secrets:
+        return None
+    creds = Credentials.from_service_account_info(
+        dict(st.secrets["gcp_service_account"]),
+        scopes=[
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ],
+    )
+    return gspread.authorize(creds)
+
+
+@st.cache_resource(show_spinner=False)
+def _get_worksheet(name: str, headers_tuple: tuple):
+    """Return a worksheet handle, creating it (with headers) if needed."""
+    client = _get_gspread_client()
+    if client is None:
+        return None
+    sheet_id = st.secrets.get("gsheet_id")
+    if not sheet_id:
+        return None
+    spreadsheet = client.open_by_key(sheet_id)
+    try:
+        ws = spreadsheet.worksheet(name)
+    except Exception:
+        ws = spreadsheet.add_worksheet(title=name, rows=1000, cols=len(headers_tuple))
+    if not ws.row_values(1):
+        ws.append_row(list(headers_tuple))
+    return ws
+
+
+def _append_to_sheet(sheet_name: str, headers: list, row: list) -> bool:
+    """Append a row to the given worksheet. Returns True on success."""
+    try:
+        ws = _get_worksheet(sheet_name, tuple(headers))
+        if ws is None:
+            return False
+        ws.append_row(row, value_input_option="RAW")
+        return True
+    except Exception as e:
+        try:
+            st.toast(
+                f"Cloud save failed, using local backup ({type(e).__name__}).",
+                icon="⚠️",
+            )
+        except Exception:
+            pass
+        return False
+
+
+def _append_to_csv(path: str, headers: list, row: list):
+    file_exists = os.path.exists(path) and os.path.getsize(path) > 0
+    with open(path, "a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(headers)
+        writer.writerow(row)
+
+
 def save_rating(participant_id: str, block: str, stimulus_id: str,
                 stimulus_label: str, position: int, ratings: dict,
                 demographics: dict):
-    """Append a single stimulus rating to the participant's CSV."""
-    row = {
+    """Persist a single stimulus rating (Google Sheets first, CSV as fallback)."""
+    row_dict = {
         "timestamp": datetime.now().isoformat(),
         "participant_id": participant_id,
         "block": block,
@@ -146,34 +246,24 @@ def save_rating(participant_id: str, block: str, stimulus_id: str,
         **{f"rating_{k}": v for k, v in ratings.items()},
         **{f"demo_{k}": v for k, v in demographics.items()},
     }
-    path = get_results_path(participant_id)
-    df_new = pd.DataFrame([row])
-    df_combined = df_new
-    if os.path.exists(path) and os.path.getsize(path) > 0:
-        try:
-            df_existing = pd.read_csv(path)
-            df_combined = pd.concat([df_existing, df_new], ignore_index=True)
-        except (pd.errors.EmptyDataError, pd.errors.ParserError):
-            pass  # File is unreadable; overwrite with the new row.
-    df_combined.to_csv(path, index=False)
+    row = [row_dict.get(col, "") for col in RATING_COLUMNS]
+
+    if not _append_to_sheet(GSHEET_RATINGS_WORKSHEET, RATING_COLUMNS, row):
+        _append_to_csv(get_results_path(participant_id), RATING_COLUMNS, row)
 
 
 def save_comment(participant_id: str, comment: str):
-    path = os.path.join(RESULTS_DIR, "comments.csv")
-    row = {
+    row_dict = {
         "timestamp": datetime.now().isoformat(),
         "participant_id": participant_id,
         "comment": comment,
     }
-    df_new = pd.DataFrame([row])
-    df_combined = df_new
-    if os.path.exists(path) and os.path.getsize(path) > 0:
-        try:
-            df_existing = pd.read_csv(path)
-            df_combined = pd.concat([df_existing, df_new], ignore_index=True)
-        except (pd.errors.EmptyDataError, pd.errors.ParserError):
-            pass
-    df_combined.to_csv(path, index=False)
+    row = [row_dict[col] for col in COMMENT_COLUMNS]
+    if not _append_to_sheet(GSHEET_COMMENTS_WORKSHEET, COMMENT_COLUMNS, row):
+        _append_to_csv(
+            os.path.join(RESULTS_DIR, "comments.csv"),
+            COMMENT_COLUMNS, row,
+        )
 
 
 def deterministic_shuffle(items: list, seed: str) -> list:
@@ -239,7 +329,7 @@ def page_welcome():
     and rate them on several perceptual dimensions. These audio clips may come from real human speakers or AI speech synthesis systems.
 
     **What to expect:**
-    - The study consists of two parts (English and German) and takes approximately **?? minutes** in total.
+    - The study consists of two parts (English and German) and takes approximately **35-40 minutes** in total.
     - Please use **headphones** for the best listening experience.
     - Please conduct the study on a laptop or desktop computer in a quiet environment, not on a mobile phone.
     """)
@@ -262,7 +352,7 @@ def page_welcome():
     headphones in a quiet environment on a laptop or desktop computer.
                 
     **Duration and compensation for participation**  
-    Participation in the study will require approximately ?? minutes. Participants will not receive 
+    Participation in the study will require approximately 35-40 minutes. Participants will not receive 
     any kind of gratification.
 
     **Possible benefit of the study**  
@@ -437,7 +527,7 @@ def page_instructions():
     """)
 
     st.warning(
-        "Please evaluate the way the dialogue is spoken, not sentence structure, grammar or word choice. "
+        "Please evaluate the way the dialogue is spoken, not sentence structure, grammar or word choice."
         "Focus on vocal characteristics such as naturalness, clarity, and fit to the situation."
         
     )
@@ -468,7 +558,11 @@ def page_practice():
     st.info("This is a practice trial. Your ratings here will **not** be recorded.")
     progress_bar(idx, total, "Practice")
     st.divider()
-
+    st.warning(
+        "Please evaluate the way the dialogue is spoken, not sentence structure, grammar or word choice."
+        "Focus on vocal characteristics such as naturalness, clarity, and fit to the situation."
+        
+    )
     render_stimulus(stimulus, is_practice=True)
 
     if st.session_state.listened and len(st.session_state.current_ratings) == len(DIMENSIONS):
@@ -516,7 +610,11 @@ def page_rating():
     st.title(f"{lang_name} Block — Clip {idx + 1}/{total}")
     progress_bar(idx, total, f"{lang_name} block")
     st.divider()
-
+    st.warning(
+        "Please evaluate the way the dialogue is spoken, not sentence structure, grammar or word choice."
+        "Focus on vocal characteristics such as naturalness, clarity, and fit to the situation."
+        
+    )
     render_stimulus(stimulus, is_practice=False)
 
     all_rated = len(st.session_state.current_ratings) == len(DIMENSIONS)

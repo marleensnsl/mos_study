@@ -1,2 +1,3 @@
 results/
 *.csv
+.streamlit/secrets.toml

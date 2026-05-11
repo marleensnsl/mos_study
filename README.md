@@ -60,25 +60,55 @@ streamlit run app.py
 4. Click **Deploy**. You get a link like `https://yourname-study.streamlit.app`.
 
 > ⚠️ On Streamlit Community Cloud, the `results/` CSV files are **not persistent**
-> between restarts. Use one of the options below for persistent storage.
+> between restarts. The app writes ratings to a Google Sheet instead. See setup below.
 
-## Persistent Storage Options
+## Persistent Storage — Google Sheets
 
-### Option A — Google Sheets (Recommended for simplicity)
-Use `gspread` + `st.secrets` to write each row to a Google Sheet instead of CSV.
-See: https://docs.streamlit.io/develop/tutorials/databases/public-gsheet
+The app writes every rating row directly to a Google Sheet using a service account.
+If the Sheets call fails or no credentials are configured (e.g. local dev), it falls
+back to writing a CSV in `results/`.
 
-### Option B — Local deployment (TU network / own server)
-Run locally on a machine that stays on, expose via `ngrok` or university server:
+### One-time setup
+
+1. **Create a Google Cloud project** at https://console.cloud.google.com → *New Project*.
+2. **Enable the APIs** under *APIs & Services → Library*:
+   - Google Sheets API
+   - Google Drive API
+3. **Create a service account** under *IAM & Admin → Service Accounts → Create*:
+   - Name it e.g. `study-writer`
+   - No roles needed at the project level — sharing the sheet is enough
+   - Open the new account → *Keys → Add key → JSON*. A JSON file downloads.
+4. **Create the Google Sheet** at https://sheets.google.com (e.g. `mos_study_results`).
+   - Note the spreadsheet ID from the URL: `docs.google.com/spreadsheets/d/<ID>/edit`
+   - Click *Share* → paste the service account's `client_email` (from the JSON,
+     looks like `study-writer@your-project.iam.gserviceaccount.com`) → give *Editor* access.
+5. **Add the credentials to Streamlit secrets:**
+   - **Locally:** copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml`
+     and fill in the values from the JSON file. **Do not commit this file** — it is
+     already in `.gitignore`.
+   - **On Streamlit Cloud:** go to your app → *Settings → Secrets* → paste the same
+     TOML content into the editor. Save.
+
+The two worksheets `ratings` and `comments` are auto-created on the first write,
+including a header row.
+
+### Verifying the setup
+
+After deploying, complete one practice trial and one real rating. Open the Google
+Sheet — a new row should appear in the `ratings` worksheet within a few seconds.
+If you see a small "Cloud save failed, using local backup" toast in the app, the
+service account doesn't have access to the sheet (most common cause: forgot to
+share it with the `client_email`).
+
+## Alternative: Local-only deployment
+
+If you'd rather run the study on your own machine, skip the Sheets setup —
+results are written to `results/participant_<id>.csv`. Expose with `ngrok` or
+similar:
 ```bash
-pip install streamlit
 streamlit run app.py --server.port 8501
-ngrok http 8501   # gives you a public URL
+ngrok http 8501
 ```
-
-### Option C — Export CSV manually
-Ask participants to download their own responses via the download button on the
-thank-you page, then email the CSV to you.
 
 ## Editing Stimuli
 
