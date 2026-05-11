@@ -232,6 +232,25 @@ def _append_to_csv(path: str, headers: list, row: list):
         writer.writerow(row)
 
 
+def _storage_status() -> str:
+    """Diagnose why Sheets isn't being used. Returns a short human string."""
+    try:
+        import gspread  # noqa: F401
+    except ImportError:
+        return "CSV fallback — `gspread` is NOT installed in this environment."
+    if "gcp_service_account" not in st.secrets:
+        return "CSV fallback — `gcp_service_account` is missing from st.secrets."
+    if not st.secrets.get("gsheet_id"):
+        return "CSV fallback — `gsheet_id` is missing from st.secrets."
+    try:
+        ws = _get_worksheet(GSHEET_RATINGS_WORKSHEET, tuple(RATING_COLUMNS))
+        if ws is None:
+            return "CSV fallback — worksheet handle is None (check secrets)."
+        return f"OK — writing to Google Sheet, worksheet '{ws.title}'."
+    except Exception as e:
+        return f"CSV fallback — {type(e).__name__}: {e}"
+
+
 def save_rating(participant_id: str, block: str, stimulus_id: str,
                 stimulus_label: str, position: int, ratings: dict,
                 demographics: dict):
@@ -803,6 +822,14 @@ def main():
     """, unsafe_allow_html=True)
 
     init_session()
+
+    # Debug mode: append `?debug=1` to the URL to see storage status.
+    if st.query_params.get("debug") == "1":
+        status = _storage_status()
+        if status.startswith("OK"):
+            st.success(f"Storage status: {status}")
+        else:
+            st.error(f"Storage status: {status}")
 
     # Scroll back to top whenever the user navigates to a new page or new stimulus.
     nav_state = (
