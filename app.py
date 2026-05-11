@@ -815,8 +815,10 @@ def main():
         st.components.v1.html(
             """
             <script>
+              const doc = window.parent.document;
+              const win = window.parent;
+
               function scrollAllToTop() {
-                const doc = window.parent.document;
                 const candidates = [
                   doc.querySelector('section.main'),
                   doc.querySelector('.main'),
@@ -826,17 +828,26 @@ def main():
                   doc.scrollingElement,
                   doc.documentElement,
                   doc.body,
-                  window.parent,
                 ];
                 for (const t of candidates) {
                   if (!t) continue;
                   try { t.scrollTop = 0; } catch (e) {}
-                  try { if (t.scrollTo) t.scrollTo(0, 0); } catch (e) {}
+                  try { if (t.scrollTo) t.scrollTo({top: 0, behavior: 'instant'}); } catch (e) {}
                 }
+                try { win.scrollTo({top: 0, behavior: 'instant'}); } catch (e) {}
               }
-              // Retry several times to outrun Streamlit's late layout adjustments.
+
+              // Immediate + paced retries for the first second.
               scrollAllToTop();
-              [0, 50, 150, 350, 700].forEach(d => setTimeout(scrollAllToTop, d));
+              [0, 50, 150, 350, 700, 1200].forEach(d => setTimeout(scrollAllToTop, d));
+
+              // For up to 2.5s, scroll back to top on every DOM mutation
+              // (covers Streamlit's late layout passes after rerun).
+              try {
+                const observer = new MutationObserver(() => scrollAllToTop());
+                observer.observe(doc.body, {childList: true, subtree: true});
+                setTimeout(() => observer.disconnect(), 2500);
+              } catch (e) {}
             </script>
             """,
             height=0,
