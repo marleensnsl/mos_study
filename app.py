@@ -232,23 +232,75 @@ def _append_to_csv(path: str, headers: list, row: list):
         writer.writerow(row)
 
 
-def _storage_status() -> str:
-    """Diagnose why Sheets isn't being used. Returns a short human string."""
-    try:
-        import gspread  # noqa: F401
-    except ImportError:
-        return "CSV fallback — `gspread` is NOT installed in this environment."
-    if "gcp_service_account" not in st.secrets:
-        return "CSV fallback — `gcp_service_account` is missing from st.secrets."
-    if not st.secrets.get("gsheet_id"):
-        return "CSV fallback — `gsheet_id` is missing from st.secrets."
+def _fetch_participant_history(participant_id: str) -> list:
+    """Return all existing rating rows for this participant (Sheets, with CSV fallback)."""
     try:
         ws = _get_worksheet(GSHEET_RATINGS_WORKSHEET, tuple(RATING_COLUMNS))
-        if ws is None:
-            return "CSV fallback — worksheet handle is None (check secrets)."
-        return f"OK — writing to Google Sheet, worksheet '{ws.title}'."
-    except Exception as e:
-        return f"CSV fallback — {type(e).__name__}: {e}"
+        if ws is not None:
+            records = ws.get_all_records()
+            return [
+                r for r in records
+                if str(r.get("participant_id", "")).strip().lower() == participant_id
+            ]
+    except Exception:
+        pass
+    path = get_results_path(participant_id)
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, encoding="utf-8") as f:
+            return list(csv.DictReader(f))
+    except Exception:
+        return []
+
+
+def _compute_resume_state(participant_id: str, history: list):
+    """Compute resume info from previous rows. Returns None if no history."""
+    if not history:
+        return None
+    history_sorted = sorted(history, key=lambda r: str(r.get("timestamp", "")))
+    last = history_sorted[-1]
+    demographics = {
+        "age": last.get("demo_age", ""),
+        "gender": last.get("demo_gender", ""),
+        "english_level": last.get("demo_english_level", ""),
+        "german_level": last.get("demo_german_level", ""),
+        "therapy_experience_receiving": last.get("demo_therapy_experience_receiving", ""),
+        "therapy_experience_giving": last.get("demo_therapy_experience_giving", ""),
+    }
+    completed_ids = {r.get("stimulus_id") for r in history if r.get("stimulus_id")}
+
+    h = int(hashlib.md5(participant_id.encode()).hexdigest(), 16)
+    language_order = ["en", "de"] if h % 2 == 0 else ["de", "en"]
+    en_order = deterministic_shuffle(list(range(len(EN_STIMULI))), seed=participant_id + "_en")
+    de_order = deterministic_shuffle(list(range(len(DE_STIMULI))), seed=participant_id + "_de")
+    total = len(EN_STIMULI) + len(DE_STIMULI)
+
+    completed_blocks = []
+    for block in language_order:
+        order = en_order if block == "en" else de_order
+        stimuli = EN_STIMULI if block == "en" else DE_STIMULI
+        for idx, stim_idx in enumerate(order):
+            if stimuli[stim_idx]["id"] not in completed_ids:
+                return {
+                    "all_done": False,
+                    "demographics": demographics,
+                    "language_order": language_order,
+                    "en_order": en_order,
+                    "de_order": de_order,
+                    "block": block,
+                    "stimulus_index": idx,
+                    "completed_blocks": completed_blocks[:],
+                    "completed_count": len(completed_ids),
+                    "total_count": total,
+                }
+        completed_blocks.append(block)
+    return {
+        "all_done": True,
+        "demographics": demographics,
+        "completed_count": len(completed_ids),
+        "total_count": total,
+    }
 
 
 def save_rating(participant_id: str, block: str, stimulus_id: str,
@@ -349,9 +401,17 @@ def page_welcome():
 
     **What to expect:**
     - The study consists of two parts (English and German) and takes approximately **35-40 minutes** in total.
-    - Please use **headphones** for the best listening experience.
-    - Please conduct the study on a laptop or desktop computer in a quiet environment, not on a mobile phone.
+
+    **Important Prerequisites:**
+    - You need a stable internet connection
+    - Please use **headphones** for the best listening experience
+    - Please conduct the study on a laptop or desktop computer in a quiet environment
     """)
+
+    st.warning(
+        "**Language requirement:** You must understand spoken English **and** German well "
+        "(at least **B2 / upper-intermediate** level in both). If this does not apply to you, please do not participate."
+    )
 
     st.divider()
 
@@ -395,7 +455,7 @@ def page_welcome():
     Perceptual ratings of audio clips.
                 
     Personal data collected are:  
-    Age, sex, language proficiency, and whether the participant has experience with therapeutic conversations.
+    Age, sex, and whether the participant has experience with therapeutic conversations.
 
     **Confidentiality**  
     All data collected in course of the study are naturally confidential and will only be used in anonymized form. Demographic data like age or sex do not allow deducing unambiguous information about your person. You will be asked at no point of the study to disclose your name or other unambiguous information about yourself.
@@ -426,7 +486,12 @@ def page_welcome():
     If you have any questions, suggestions or complaints, you are welcome to contact Marleen Sinsel: marleen.sinsel@stud.tu-darmstadt.de
     """)
 
-    consent = st.checkbox("I confirm that I have read and understood the above information and agree to participate in this study.")
+    consent = st.checkbox(
+        "I confirm that I have read and understood the above information and agree to participate in this study."
+    )
+    language_consent = st.checkbox(
+        "I confirm that I understand spoken **English and German** at B2 level (upper-intermediate) or higher."
+    )
 
     st.divider()
     st.markdown("#### Please enter a participant code.")
@@ -436,21 +501,47 @@ def page_welcome():
                         placeholder="e.g. KE00",
                         value=st.session_state.participant_id)
 
-    if st.button("Continue →", disabled=not consent or len(pid.strip()) < 3):
-        st.session_state.participant_id = pid.strip().lower()
+    if st.button("Continue →", disabled=not (consent and language_consent) or len(pid.strip()) < 3):
+        normalized = pid.strip().lower()
+        st.session_state.participant_id = normalized
 
-        # Determine language order: even hash → EN first, odd → DE first
-        h = int(hashlib.md5(pid.encode()).hexdigest(), 16)
+        # If this participant has prior ratings, resume where they left off.
+        history = _fetch_participant_history(normalized)
+        resume = _compute_resume_state(normalized, history)
+
+        if resume and resume.get("all_done"):
+            st.session_state.demographics = resume["demographics"]
+            st.session_state._resume_banner = (
+                "This participant code has already completed the study. "
+                "Thank you — there is nothing more to rate."
+            )
+            go_to("thank_you")
+
+        if resume:
+            st.session_state.demographics = resume["demographics"]
+            st.session_state.language_order = resume["language_order"]
+            st.session_state.en_order = resume["en_order"]
+            st.session_state.de_order = resume["de_order"]
+            st.session_state.block = resume["block"]
+            st.session_state.stimulus_index = resume["stimulus_index"]
+            st.session_state.completed_blocks = resume["completed_blocks"]
+            st.session_state._resume_banner = (
+                f"Welcome back — resuming where you left off "
+                f"({resume['completed_count']}/{resume['total_count']} clips already rated)."
+            )
+            go_to("rating")
+
+        # Fresh participant.
+        h = int(hashlib.md5(normalized.encode()).hexdigest(), 16)
         if h % 2 == 0:
             st.session_state.language_order = ["en", "de"]
         else:
             st.session_state.language_order = ["de", "en"]
 
-        # Shuffle stimuli deterministically per participant
         st.session_state.en_order = deterministic_shuffle(
-            list(range(len(EN_STIMULI))), seed=pid + "_en")
+            list(range(len(EN_STIMULI))), seed=normalized + "_en")
         st.session_state.de_order = deterministic_shuffle(
-            list(range(len(DE_STIMULI))), seed=pid + "_de")
+            list(range(len(DE_STIMULI))), seed=normalized + "_de")
 
         go_to("demographics")
 
@@ -466,20 +557,6 @@ def page_demographics():
         gender = st.selectbox(
             "Gender",
             options=["", "Female", "Male", "Prefer not to say"],
-        )
-
-        st.markdown("##### Language proficiency")
-        st.caption("Please rate your proficiency in the following languages.")
-
-        english_level = st.selectbox(
-            "English proficiency",
-            options=["A1 (Beginner)", "A2", "B1", "B2", "C1", "C2 (Native/Near-native)"],
-            index=3,
-        )
-        german_level = st.selectbox(
-            "German proficiency",
-            options=["A1 (Beginner)", "A2", "B1", "B2", "C1", "C2 (Native/Near-native)"],
-            index=3,
         )
 
         st.markdown("##### Experience with therapeutic conversations")
@@ -513,8 +590,6 @@ def page_demographics():
             st.session_state.demographics = {
                 "age": age,
                 "gender": gender,
-                "english_level": english_level,
-                "german_level": german_level,
                 "therapy_experience_receiving": therapy_exp_receiving,
                 "therapy_experience_giving": therapy_exp_giving,
             }
@@ -528,9 +603,9 @@ def page_instructions():
     You will listen to and rate parts of therapy conversations.
                 
     **How each trial works:**
-    1. An audio player will appear. Press play and listen to the full clip.
+    1. Listen to the full clip.
     2. Once you have listened, tick the checkbox to confirm.
-    3. Rate the clip on all four dimensions.
+    3. Rate the speech of both speakers (patient and therapist) on all four dimensions.
     4. Press **Submit Rating** to move to the next clip.
 
     ---
@@ -546,7 +621,7 @@ def page_instructions():
     """)
 
     st.warning(
-        "Please evaluate the way the dialogue is spoken, not sentence structure, grammar or word choice."
+        "Please evaluate the way the dialogue is spoken, not sentence structure, grammar or word choice. "
         "Focus on vocal characteristics such as naturalness, clarity, and fit to the situation."
         
     )
@@ -578,7 +653,7 @@ def page_practice():
     progress_bar(idx, total, "Practice")
     st.divider()
     st.warning(
-        "Please evaluate the way the dialogue is spoken, not sentence structure, grammar or word choice."
+        "Please evaluate the way the dialogue is spoken, not sentence structure, grammar or word choice. "
         "Focus on vocal characteristics such as naturalness, clarity, and fit to the situation."
         
     )
@@ -609,6 +684,7 @@ def page_block_intro():
 
     - This block contains **{total} audio clips**.
     - Rate each clip on the same four dimensions as in the practice trials.
+    - Please rate the speech of both speakers as a whole.
     """)
 
     if st.button(f"Begin {lang_name} block →"):
@@ -630,9 +706,9 @@ def page_rating():
     progress_bar(idx, total, f"{lang_name} block")
     st.divider()
     st.warning(
-        "Please evaluate the way the dialogue is spoken, not sentence structure, grammar or word choice."
-        "Focus on vocal characteristics such as naturalness, clarity, and fit to the situation."
-        
+        "Please evaluate the way the dialogue is spoken, not sentence structure, grammar or word choice. "
+        "Focus on vocal characteristics such as naturalness, clarity, and fit to the situation. "
+        "Please rate the speech of both speakers (patient and therapist)."
     )
     render_stimulus(stimulus, is_practice=False)
 
@@ -823,13 +899,10 @@ def main():
 
     init_session()
 
-    # Debug mode: append `?debug=1` to the URL to see storage status.
-    if st.query_params.get("debug") == "1":
-        status = _storage_status()
-        if status.startswith("OK"):
-            st.success(f"Storage status: {status}")
-        else:
-            st.error(f"Storage status: {status}")
+    # One-shot resume banner (set by page_welcome when prior data was found).
+    if "_resume_banner" in st.session_state:
+        st.info(st.session_state["_resume_banner"])
+        del st.session_state["_resume_banner"]
 
     # Scroll back to top whenever the user navigates to a new page or new stimulus.
     nav_state = (
