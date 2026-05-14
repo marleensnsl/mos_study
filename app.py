@@ -654,7 +654,7 @@ def page_practice():
     st.divider()
     st.warning(
         "Please evaluate the way the dialogue is spoken, not sentence structure, grammar or word choice. "
-        "Focus on vocal characteristics such as naturalness, clarity, and fit to the situation."
+        "Focus on vocal characteristics such as naturalness, clarity, and fit to the situation.Please rate the speech of both speakers (patient and therapist)."
         
     )
     render_stimulus(stimulus, is_practice=True)
