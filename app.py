@@ -622,7 +622,7 @@ def page_instructions():
 
     st.warning(
         "Please evaluate the way the dialogue is spoken, not sentence structure, grammar or word choice. "
-        "Focus on vocal characteristics such as naturalness, clarity, and fit to the situation."
+        "Focus on vocal characteristics such as naturalness, clarity, and fit to the situation. Please rate the speech of both speakers (patient and therapist)."
         
     )
     st.warning(
